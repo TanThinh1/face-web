@@ -26,7 +26,6 @@ async function openCam(fn) {
   try {
     await fn();
   } catch { status('Không mở được camera (cần HTTPS + cấp quyền)'); return; }
-  $('c').parentElement.style.aspectRatio = v.videoWidth + '/' + v.videoHeight;
   cv.width = v.videoWidth; cv.height = v.videoHeight;
   ['btnFlip', 'btnSnap'].forEach(i => ($(i).disabled = false));
   $('btnCam').textContent = 'Tắt camera';
@@ -111,6 +110,12 @@ $('fimp').onchange = async e => {
   catch { alert('File không hợp lệ.'); }
   e.target.value = '';
 };
+
+$('btnMenu').onclick = () => $('sheet').classList.toggle('open');
+$('btnClose').onclick = () => $('sheet').classList.remove('open');
+const root = document.documentElement;
+if (!root.requestFullscreen) $('btnFull').hidden = true;
+$('btnFull').onclick = () => (document.fullscreenElement ? document.exitFullscreen() : root.requestFullscreen());
 
 (async () => {
   renderList();
