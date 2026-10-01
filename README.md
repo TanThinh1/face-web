@@ -39,3 +39,10 @@ Mở http://localhost:8000
 - Lần đầu cần mạng để tải mô hình (vài MB), sau đó được cache.
 - Lưu vector 128 số (không phải ảnh) trong trình duyệt; có nút xuất/nhập JSON.
 - Chỉ đăng ký/nhận diện người đã đồng ý.
+
+## Đồng bộ nhiều thiết bị (Supabase, miễn phí, vẫn dùng GitHub Pages)
+1. Tạo project tại https://supabase.com → SQL Editor → dán và chạy `supabase/setup.sql`.
+2. Project Settings → API: chép **Project URL** và **anon public key** vào `web/js/config.js`.
+3. Push lên GitHub. Mở app → ☰ → "Đồng bộ nhiều thiết bị" → nhập cùng một mã trên mọi thiết bị.
+Dữ liệu (vector 128 số, không phải ảnh) được gửi lên server theo hash của mã; không có mã thì không đọc được.
+Khi đồng bộ, thiết bị có thay đổi chưa gửi sẽ ghi đè bản trên server (bản mới nhất thắng).

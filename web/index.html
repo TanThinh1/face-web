@@ -29,19 +29,28 @@
     <b>Đăng ký khuôn mặt</b>
     <div class="row">
       <input type="text" id="name" placeholder="Tên người (vd: Thịnh)">
-      <button class="p" id="btnSnap" disabled>Chụp từ camera</button>
+      <button class="p" id="btnSnap" disabled>Chụp 5 mẫu tự động</button>
       <button id="btnUp" disabled>Tải ảnh lên</button>
       <input type="file" id="file" accept="image/*" multiple hidden>
     </div>
-    <div class="hint">Nên đăng ký 3–5 ảnh mỗi người (thẳng, nghiêng nhẹ, đủ sáng).</div>
+    <div class="hint">Bấm chụp rồi nhìn vào camera, xoay mặt nhẹ sang hai bên. App tự lấy 5 mẫu rõ nét và bỏ mẫu trùng.</div>
   </section>
 
   <section class="card">
     <b>Cài đặt</b>
     <label>Độ nghiêm ngặt
-      <input type="range" id="th" min="0.35" max="0.7" step="0.01" value="0.5"><span id="thv">0.50</span>
+      <input type="range" id="th" min="0.35" max="0.7" step="0.01" value="0.45"><span id="thv">0.45</span>
     </label>
     <label><input type="checkbox" id="alertOn"> Gửi Telegram khi gặp người lạ (cần server)</label>
+  </section>
+
+  <section class="card">
+    <b>Đồng bộ nhiều thiết bị</b> <span id="syncState" class="hint"></span>
+    <div class="row">
+      <input type="text" id="syncCode" placeholder="Mã đồng bộ (≥ 8 ký tự)">
+      <button class="p" id="btnSync">Lưu &amp; đồng bộ</button>
+    </div>
+    <div class="hint">Nhập cùng một mã trên mọi thiết bị. Dùng mã dài, khó đoán và không chia sẻ cho ai.</div>
   </section>
 
   <section class="card">
