@@ -8,6 +8,8 @@ const v = $('v'), cv = $('c'), ctx = cv.getContext('2d');
 const cam = new Camera(v), tracker = new Tracker();
 let people = loadPeople(), dirty = loadDirty(), running = false, lastAlert = 0, busy = false;
 const status = t => ($('status').textContent = t);
+let hold = 0;
+const note = (t, ms = 4000) => { status(t); hold = Date.now() + ms; };
 const syncMsg = t => ($('syncState').textContent = t);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -51,8 +53,9 @@ $('btnSync').onclick = async () => {
     await commit();
   } catch { syncMsg('· ⚠ không kết nối được server'); }
 };
-document.addEventListener('visibilitychange', () => !document.hidden && refresh());
-window.addEventListener('focus', refresh);
+document.addEventListener('visibilitychange', () => !document.hidden && !busy && refresh());
+window.addEventListener('focus', () => !busy && refresh());
+window.addEventListener('unhandledrejection', e => note('Lỗi: ' + (e.reason?.message || e.reason), 8000));
 setInterval(() => { if (!document.hidden && !busy) refresh(); }, 30000);
 
 $('list').onclick = async e => {
@@ -85,13 +88,14 @@ async function sendAlert() {
   try {
     const fd = new FormData(); fd.append('photo', await cam.snapshot(), 'unknown.jpg');
     const r = await fetch('/api/alert', { method: 'POST', body: fd });
-    status(r.ok ? 'Đã gửi cảnh báo Telegram' : 'Gửi cảnh báo thất bại');
-  } catch { status('Không kết nối được server'); }
+    note(r.ok ? 'Đã gửi cảnh báo Telegram' : 'Gửi cảnh báo thất bại');
+  } catch { note('Không kết nối được server'); }
 }
 
 async function loop() {
   if (!running) return;
-  if (v.readyState >= 2) {
+  if (busy) ctx.clearRect(0, 0, cv.width, cv.height);
+  if (v.readyState >= 2 && !busy) {
     const items = tracker.update(await detectLive(v), performance.now());
     ctx.clearRect(0, 0, cv.width, cv.height);
     const W = cv.width, mirror = cam.facing === 'user', th = +$('th').value, has = Object.keys(people).length > 0;
@@ -115,7 +119,7 @@ async function loop() {
       ctx.fillStyle = '#fff'; ctx.fillText(label, x + 7, Math.max(h - 8, b.y - 8));
     }
     if (unknown) sendAlert();
-    status(items.length ? `${items.length} khuôn mặt` : 'Không thấy khuôn mặt');
+    if (Date.now() > hold) status(items.length ? `${items.length} khuôn mặt` : 'Không thấy khuôn mặt');
   }
   setTimeout(() => requestAnimationFrame(loop), 40);
 }
@@ -127,29 +131,50 @@ const needName = () => {
   return n;
 };
 $('btnSnap').onclick = async () => {
-  const n = needName(); if (!n || busy) return;
-  busy = true; await refresh(); let ok = 0;
-  for (let i = 1; i <= 5; i++) {
-    status(`Mẫu ${i}/5 – nhìn vào camera, xoay mặt nhẹ`);
-    const res = await detectHQ(v);
-    const f = res.length === 1 ? res[0] : null;
-    if (f && f.detection.score >= 0.85 && f.detection.box.width >= v.videoWidth * 0.18 && addSample(n, f.descriptor)) ok++;
-    await sleep(700);
-  }
-  busy = false;
-  if (ok) await commit();
-  status(ok ? `Đã lưu ${ok}/5 mẫu cho ${n}` : 'Không lưu được: giữ 1 mặt rõ, gần và đủ sáng');
+  const n = needName(); if (!n) return;
+  if (busy) return note('Đang xử lý, đợi chút…');
+  busy = true;
+  const why = { none: 0, multi: 0, small: 0, blur: 0, dup: 0 };
+  let ok = 0;
+  try {
+    await refresh();
+    for (let t = 1; t <= 10 && ok < 5; t++) {
+      note(`Đang lấy mẫu ${ok}/5 – nhìn thẳng, xoay mặt nhẹ`, 3000);
+      const res = await detectHQ(v);
+      if (!res.length) why.none++;
+      else if (res.length > 1) why.multi++;
+      else {
+        const f = res[0];
+        if (f.detection.score < 0.7) why.blur++;
+        else if (f.detection.box.width < v.videoWidth * 0.12) why.small++;
+        else if (addSample(n, f.descriptor, 0.04)) ok++;
+        else why.dup++;
+      }
+      await sleep(500);
+    }
+    if (ok) await commit();
+  } catch (e) { console.error(e); note('Lỗi: ' + (e.message || e), 8000); return; }
+  finally { busy = false; }
+  if (ok) return note(`Đã lưu ${ok} mẫu cho ${n}` + (ok < 3 ? ' – nên chụp thêm, xoay mặt nhẹ' : ''), 6000);
+  const lab = { none: 'không thấy mặt', multi: 'có nhiều hơn 1 mặt trong khung', small: 'mặt quá nhỏ, hãy lại gần', blur: 'ảnh mờ hoặc thiếu sáng', dup: 'mẫu trùng với mẫu đã có' };
+  note('Chưa lưu được: ' + lab[Object.entries(why).sort((x, y) => y[1] - x[1])[0][0]], 6000);
 };
 $('btnUp').onclick = () => needName() && $('file').click();
 $('file').onchange = async e => {
-  const n = $('name').value.trim(); let ok = 0; await refresh();
-  for (const f of e.target.files) {
-    const res = await detectHQ(await faceapi.bufferToImage(f));
-    if (res.length === 1 && res[0].detection.score >= 0.7 && addSample(n, res[0].descriptor, 0.02)) ok++;
-  }
-  if (ok) await commit();
-  alert(`Đã thêm ${ok}/${e.target.files.length} ảnh cho ${n} (ảnh trùng hoặc có nhiều mặt sẽ bị bỏ qua).`);
+  const n = $('name').value.trim(), files = [...e.target.files];
   e.target.value = '';
+  if (busy) return note('Đang xử lý, đợi chút…');
+  busy = true; let ok = 0;
+  try {
+    await refresh();
+    for (const f of files) {
+      const res = await detectHQ(await faceapi.bufferToImage(f));
+      if (res.length === 1 && res[0].detection.score >= 0.7 && addSample(n, res[0].descriptor, 0.02)) ok++;
+    }
+    if (ok) await commit();
+  } catch (er) { console.error(er); note('Lỗi: ' + (er.message || er), 8000); return; }
+  finally { busy = false; }
+  note(`Đã thêm ${ok}/${files.length} ảnh cho ${n}` + (ok < files.length ? ' (ảnh không thấy mặt, nhiều mặt, mờ hoặc trùng bị bỏ qua)' : ''), 7000);
 };
 
 // ---- Xuất / nhập ----
